@@ -1,178 +1,219 @@
-<div align="center">
+# Shipcheck
 
-# 🚢 Shipcheck
-
-**Open-source, local-first production-readiness checks for modern applications.**
+**Open-source pre-deployment readiness and topology verification for containerized applications.**  
+Built and maintained by [Deployxa](https://deployxa.com). Distributed under the MIT License.
 
 [![CI Status](https://github.com/deployxa/shipcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/deployxa/shipcheck/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/go-1.22+-blue.svg)](https://go.dev)
 [![Release](https://img.shields.io/github/v/release/deployxa/shipcheck?color=blue)](https://github.com/deployxa/shipcheck/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-*Catch broken deployments at commit time, not in production at 2 AM.*
+Shipcheck is a local-first static analysis tool that detects deployment-halting defects before code leaves your workstation or enters a CI runner: broken Dockerfile build contexts, compose files referencing non-existent services or undeclared volumes, development servers used as production entrypoints, undeclared environment variables, committed credentials, and missing lifecycle signal handlers.
 
-[Features](#-key-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [Rule Catalogue](#-rule-categories) • [CI/CD Integration](#-cicd-integration) • [Configuration](#-configuration)
-
-</div>
-
----
-
-## 💡 What is Shipcheck?
-
-**Shipcheck** is a lightweight, blazing-fast CLI tool that audits your application repository for production-readiness defects *before* deployment.
-
-While unit tests check logic and traditional linters check syntax, deployments often fail due to cross-cutting integration bugs:
-- A `docker-compose.yml` mounts a named volume that was never declared at the top level.
-- An environment variable is read in application code (`process.env.API_KEY`) but omitted from deployment templates and Dockerfile `ENV` specs.
-- A production `Dockerfile` runs `npm run dev` or `vite` instead of a compiled production server.
-- A container lacks a `USER` directive and runs as `root`, or lacks a `HEALTHCHECK` for orchestrators.
-- A service ignores `SIGTERM`, causing forced `SIGKILL` timeouts and dropped in-flight requests during rolling deploys.
-- Live secrets or credentials were inadvertently committed into the repository.
-
-Shipcheck analyzes your Dockerfiles, Compose files, package manifests, environment templates, and source files **as a coherent topology** to surface these issues in milliseconds.
+It operates strictly on static files, requires no account, executes no untrusted code, and makes zero network calls.
 
 ```console
 $ shipcheck ./my-app
-
 Shipcheck 0.1.0-rc1 — open-source production-readiness checks
 Project: /workspace/my-app
-Detected projects: node:.
-Scanned 42 files in 0.02s
+Detected projects: node:apps/api, node:apps/web
+Scanned 64 files in 0.04s
 
-[CRITICAL/confirmed] SC-BLD-001 package.json:5 — Development server used as production entrypoint
-    evidence: "start": "nodemon server.js"
-    fix: Run the production build and serve it with the framework's production server.
+[CRITICAL/confirmed] SC-BLD-001 apps/api/package.json:6 — Development server used as production entrypoint
+    evidence: scripts["start"] = "nodemon server.js"
+    explanation: Production entrypoint invokes nodemon; dev servers lack graceful drain and leak stack traces.
+    fix: Change "start" to execute the production runtime: "node server.js".
 
-[HIGH/confirmed] SC-CMP-001 docker-compose.yml:8 — depends_on references an undefined service
-    evidence: service "web" depends on "cache", but "cache" is not defined
-    fix: Define the missing service or remove the dependency entry.
+[HIGH/confirmed] SC-CMP-001 docker-compose.yml:14 — depends_on references an undefined service
+    evidence: service "web" depends on "cache", but "cache" is not declared in services
+    explanation: Docker Compose will fail manifest validation during container deployment.
+    fix: Define service "cache" in docker-compose.yml or remove the depends_on entry.
 
-[MEDIUM/probable] SC-ENV-001 src/server.js:14 — Referenced environment variable is not declared in any template
-    evidence: DATABASE_URL is read in 2 source location(s) but declared in no template
-    fix: Add the variable to deployment templates (.env.example, compose, Dockerfile ENV).
+[HIGH/confirmed] SC-CMP-002 docker-compose.yml:22 — Named volume is not declared at top level
+    evidence: service "api" mounts named volume "redis_data", but top-level volumes key is missing
+    explanation: Modern Compose specifications reject undeclared top-level named volumes.
+    fix: Add "volumes:\n  redis_data:" to top-level docker-compose.yml.
 
-Summary: 1 critical, 1 high, 1 medium, 0 low, 0 info
-Exit condition: 2 finding(s) at or above high threshold (exit 1)
+[MEDIUM/probable] SC-ENV-001 apps/api/src/db.js:12 — Referenced environment variable is not declared in any template
+    evidence: DATABASE_URL is read in 2 location(s) but declared in no template (.env.example, compose, Dockerfile)
+    explanation: Missing environment variables produce silent fallbacks or immediate runtime crashes upon deployment.
+    fix: Add DATABASE_URL to .env.example or declare it in the compose environment block.
+
+Summary: 1 critical, 2 high, 1 medium, 0 low, 0 info
+Exit condition: 3 finding(s) at or above high threshold (exit 1)
 ```
 
 ---
 
-## ✨ Key Features
+## Why
 
-- **⚡ Blazing Fast (<50ms):** Single static Go binary with zero external runtime dependencies. Runs instantly in pre-commit hooks and local terminals.
-- **🔒 Safe by Construction:** Evaluates repositories as untrusted input. Path traversal, symlink escapes, oversized files, and binary blobs are safely bounded.
-- **🚫 Zero Runtime Execution:** Never compiles or executes untrusted project code, package scripts, or containers.
-- **🌐 100% Offline & Local-First:** No accounts, no API keys, and zero network calls. Air-gapped safe for enterprise and CI environments.
-- **🎯 Evidence-Based & Deterministic:** Every finding includes stable rule IDs, exact source locations, severity levels, confidence ratings, and actionable remediation steps.
-- **🏢 Monorepo Aware:** Automatically detects multi-service repositories, discovering multiple Node.js, Python, and Docker projects cleanly.
-- **📊 Standard Output Formats:** Formatted human-readable CLI output, schema-validated JSON (`--format json`), and GitHub Code Scanning SARIF (`--format sarif`).
+Compilers verify types. Linters enforce code style. Unit test suites test business logic. **None of them test whether an application repository is structurally deployable.**
+
+In practice, production rollouts fail for mundane topological reasons:
+1. **Cross-manifest drift:** The Dockerfile expects an environment variable that was renamed in `.env.example`, or `.dockerignore` excludes a folder that `npm run build` needs.
+2. **Compose topology errors:** Services reference `depends_on` targets, `env_file` paths, or named volumes that do not exist in the repository.
+3. **Development leakages:** Container entrypoints execute `vite`, `nodemon`, `flask run`, or `manage.py runserver`, exposing verbose error pages and exhausting memory.
+4. **Lifecycle blindspots:** HTTP servers do not register `SIGTERM` listeners, resulting in hard kernel termination (`SIGKILL`) and dropped client connections during rolling updates.
+5. **Security regressions:** Sensitive keys (AWS access keys, Stripe live keys, Slack tokens) are committed into source code or unignored local configurations.
+
+Linters inspect individual files in isolation. Shipcheck walks the repository as an integrated deployment graph—correlating source code against manifests, Dockerfiles, compose stacks, and environment templates.
 
 ---
 
-## 📦 Supported Stacks & Manifests
+## The Finding Contract
 
-| Category | Supported Files & Manifests |
+Every finding emitted by Shipcheck adheres to a documented, deterministic contract across three distinct axes:
+
+```
+[SEVERITY / CONFIDENCE] RULE-ID file:line — Title
+    evidence:    <sanitized extract; secrets always masked>
+    explanation: <what this condition implies in production>
+    fix:         <concrete remediation steps>
+    limitation:  <documented boundaries of the static check>
+```
+
+### 1. Severity (Worst-case operational impact)
+- **`CRITICAL`**: Guaranteed deployment failure, root container compromise, or confirmed credential leak (e.g., Docker socket mounts, committed live keys).
+- **`HIGH`**: Broken deployment configuration that will fail orchestrator startup (e.g., unresolvable `depends_on`, missing named volume declarations, missing compose files).
+- **`MEDIUM`**: Production anti-patterns and probable drift (e.g., running as `root`, undeclared environment variables, floating dependencies).
+- **`LOW`**: Best-practice advisories with low blast radius (e.g., missing graceful shutdown handlers, unpinned tags).
+- **`INFO`**: Informational observations (e.g., optional healthchecks).
+
+### 2. Confidence (Degree of evidential certainty)
+- **`confirmed`**: Direct, unambiguous factual match (e.g., invalid YAML syntax, missing file reference, regex match against known token structure).
+- **`probable`**: High evidential correlation where external context might exist (e.g., variable read in code not found in any template, but possibly injected by an uncommitted cloud runner).
+- **`possible`**: Heuristic observation requiring human review (e.g., generic password assignment pattern).
+
+### 3. Check Nature
+- **`static`**: Pure static inspection of file content and directory trees.
+- **`validated`**: Verified via opt-in local subsystem validation (`--docker-validate`).
+- **`inconclusive`**: Check could not definitively prove condition due to safe bounds (e.g., oversized file, skipped depth).
+
+---
+
+## Core Principles & Safety Model
+
+Shipcheck treats the analyzed repository as **untrusted input**. It enforces strict defensive limits designed for safe local usage and sandboxed CI execution:
+
+| Risk Vector | Built-in Mitigation |
 | :--- | :--- |
-| **Node.js** | `package.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lockb` |
-| **Python** | `pyproject.toml`, `requirements*.txt`, `poetry.lock`, `uv.lock`, `Pipfile.lock` |
-| **Containers** | `Dockerfile`, `.dockerignore` |
-| **Orchestration**| `docker-compose.yml`, `docker-compose.yaml`, `compose.yml`, `compose.yaml` |
-| **Configuration**| `.env.*` templates, `Procfile`, GitHub Actions, GitLab CI, CircleCI configs |
+| **Code Execution** | **Zero execution.** Never executes `npm`, `pip`, `make`, build scripts, or project entrypoints. |
+| **Path Traversal** | All paths derived from manifests (`COPY`, `volumes`, `env_file`) are checked with `fsutil.Resolve` and confined to the repository root. Paths attempting escape (`../../etc/passwd`) are rejected. |
+| **Symlink Attacks** | Walking identifies symlinks leaving the root or forming cycles; targets outside the project boundary are safely skipped and recorded as errors. |
+| **Resource Exhaustion** | Strict internal caps: files > 5 MiB are skipped; directory recursion is capped at 24 levels; total files scanned capped at 20,000. |
+| **Secret Redaction** | Credential values matched by `SC-SEC-*` patterns are sanitized immediately at extraction (`AKIA********`, `ghp_********`). Full secrets never appear in terminal output, logs, or JSON/SARIF reports. |
+| **Network Isolation** | 100% offline. Zero telemetry, zero analytics, zero external API dependencies. |
 
 ---
 
-## 🚀 Installation
+## Supported Stacks & Discovery Topology
 
-### Using Go (Go 1.22+)
+Shipcheck automatically detects project structures without requiring manual stack flags. In monorepos, every directory containing an application manifest is analyzed as an independent component.
 
-```bash
-go install github.com/deployxa/shipcheck/cmd/shipcheck@latest
-```
+| Ecosystem | Manifests Recognized | Lockfiles Verified |
+| :--- | :--- | :--- |
+| **Node.js / JS / TS** | `package.json` | `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lockb` |
+| **Python** | `pyproject.toml`, `requirements*.txt` | `poetry.lock`, `uv.lock`, `Pipfile.lock` |
+| **Docker** | `Dockerfile`, `.dockerignore` | Multi-stage targets, `FROM`, `USER`, `EXPOSE`, `HEALTHCHECK`, `CMD` |
+| **Compose** | `docker-compose.yml`, `compose.yaml` | Services, networks, volumes, `env_file`, ports, capabilities |
+| **Environment** | `.env.*` templates, `.env` | Referenced vs. declared variables across code and manifests |
+| **Process Managers** | `Procfile` | Web / worker process entrypoints |
 
-### From Prebuilt Release Binaries
+---
 
-Download pre-compiled binaries for Linux, macOS, and Windows from the [GitHub Releases](https://github.com/deployxa/shipcheck/releases) page.
+## Installation
 
-```bash
-# Example for macOS (Apple Silicon)
-curl -sSL https://github.com/deployxa/shipcheck/releases/download/v0.1.0-rc1/shipcheck-0.1.0-rc1-darwin-arm64.tar.gz | tar -xz
-sudo mv shipcheck /usr/local/bin/
-```
+### From Source (Go 1.22+)
 
-### Build from Source
-
-```bash
+```console
 git clone https://github.com/deployxa/shipcheck.git
 cd shipcheck
 make build
 ./bin/shipcheck --help
 ```
 
+### Prebuilt Release Binaries
+
+Static binaries for Linux, macOS (Darwin), and Windows (`amd64` and `arm64`) are published with SHA256 checksums on the [Releases](https://github.com/deployxa/shipcheck/releases) page.
+
+```console
+# Download for macOS Apple Silicon
+curl -sSL https://github.com/deployxa/shipcheck/releases/download/v0.1.0-rc1/shipcheck-0.1.0-rc1-darwin-arm64.tar.gz | tar -xz
+sudo mv shipcheck /usr/local/bin/
+
+# Verify installation
+shipcheck version
+```
+
 ---
 
-## 🛠️ Quick Start
+## CLI Usage
 
-```bash
-# Basic scan with default human-friendly terminal report
-shipcheck ./my-app
+```console
+# Standard static scan (human-readable output to stdout)
+shipcheck ./my-project
 
-# Fail CI only on critical issues (default threshold: high)
-shipcheck ./my-app --severity-threshold critical
+# Control severity threshold for CI exit code gating
+shipcheck ./my-project --severity-threshold high    # Exit 1 only on HIGH and CRITICAL
 
-# Generate machine-readable JSON report
-shipcheck ./my-app --format json --output report.json
+# Output pure, schema-validated JSON
+shipcheck ./my-project --format json --output report.json
 
-# Generate SARIF for GitHub Code Scanning
-shipcheck ./my-app --format sarif --output shipcheck.sarif
+# Output SARIF 2.1.0 for GitHub Code Scanning integration
+shipcheck ./my-project --format sarif --output shipcheck.sarif
 
-# Validate compose files against local Docker engine (if available)
-shipcheck ./my-app --docker-validate
+# Opt-in Docker Compose engine validation (runs docker compose config cleanly)
+shipcheck ./my-project --docker-validate
 
-# View the built-in rule catalogue
-shipcheck rules
+# Dump the full active rule catalogue
+shipcheck rules --format markdown
 ```
 
 ### Exit Codes Contract
 
-Shipcheck conforms to a strict Unix exit code contract suitable for CI gates:
+Shipcheck conforms to a deterministic exit contract:
 
-| Code | Status | Meaning |
+| Exit Code | Classification | Description |
 | :---: | :--- | :--- |
-| **`0`** | **Clean** | Scan completed successfully; no findings at or above the configured severity threshold. |
-| **`1`** | **Findings** | Scan completed; at least one finding meets or exceeds the severity threshold (fails CI). |
-| **`2`** | **Usage Error** | Invalid invocation (unrecognized flag, inaccessible path, malformed configuration). |
-| **`3`** | **Internal Error**| Unexpected internal failure or crash. |
-| **`4`** | **Incomplete** | Scan completed, but analysis was incomplete (e.g., binary files or deep nesting skipped). |
+| **`0`** | **Clean** | Scan completed; no findings meet or exceed the active severity threshold. |
+| **`1`** | **Findings** | Scan completed; one or more findings meet or exceed the threshold (pipeline gate failure). |
+| **`2`** | **Usage Error** | Invalid flags, non-existent project path, malformed configuration file. |
+| **`3`** | **Internal Error** | Unexpected runtime crash. |
+| **`4`** | **Incomplete** | Scan completed, but input constraints forced items to be skipped (e.g., oversized files, symlink escapes). Findings are still output. |
 
 ---
 
-## 🔍 Rule Categories
+## Configuration (`.shipcheck.yml`)
 
-Shipcheck ships with an extensible catalogue of battle-tested rules across 8 operational domains:
+Shipcheck requires zero configuration by default. To persist exclusions or threshold rules across a team, place a `.shipcheck.yml` in your project root:
 
-- **🐳 Docker & Container Hardening (`SC-DCK-*`)**: Detects root user entrypoints, unpinned `latest` base images, shell-form `CMD`/`ENTRYPOINT` preventing signal propagation, missing `HEALTHCHECK`, and insecure `curl \| sh` install scripts.
-- **🐙 Docker Compose Integrity (`SC-CMP-*`)**: Detects missing `depends_on` targets, undeclared named volumes, missing `env_file` paths, dangerous `privileged: true`, host networking mode, and Docker socket passthrough mounts (`/var/run/docker.sock`).
-- **⚙️ Environment Variable Drift (`SC-ENV-*`)**: Detects variables referenced in source code but undeclared in templates/Compose, variables declared in templates but never referenced, and missing production env files.
-- **🔑 Secret & Token Leakage (`SC-SEC-*`)**: Detects committed AWS access keys, GitHub tokens, Slack tokens, Stripe live keys, Google API keys, private keys, and hardcoded credential assignments.
-- **🛑 Process & Graceful Shutdown (`SC-GRD-*`)**: Detects web servers running without `SIGTERM`/`SIGINT` handlers, preventing graceful connection draining during deployments.
-- **⚡ Startup & Build Verification (`SC-BLD-*`, `SC-SCR-*`)**: Catches development servers (`nodemon`, `vite`, `next dev`, `flask run`) used as production entrypoints, and missing npm lifecycle scripts.
-- **🔌 Network & Port Mapping (`SC-PORT-*`)**: Detects dangerous hardcoded host port collisions and mismatches between Dockerfile `EXPOSE` and Compose published ports.
-- **💾 Ephemeral Filesystem Persistence (`SC-FS-*`)**: Identifies stateful file writes occurring in ephemeral containers without attached volumes.
+```yaml
+# Severity threshold that triggers non-zero exit (critical | high | medium | low | info)
+severity_threshold: high
 
-View all active rules and remediation steps with:
-```bash
-shipcheck rules --format markdown
+# Additional directory names to exclude from directory walk
+exclude:
+  - legacy-fixtures
+  - vendor
+  - temp-assets
+
+# Disable individual rules by stable contract ID
+disable_rules:
+  - SC-DCK-002    # Explicitly permit running as root in this repository
+  - SC-PORT-001   # Permit binding specific host port
+
+# Skip reading real .env files (default: true)
+# When set to false, variable NAMES are collected for cross-referencing, but values are never stored or logged.
+skip_real_dotenv: true
 ```
-Or explore the [Full Rule Catalogue](docs/rules.md).
+
+*Note: Shipcheck enforces strict configuration parsing. Unrecognized keys fail with exit code `2` to prevent silent misconfigurations from typos.*
 
 ---
 
-## 🤖 CI/CD Integration
+## CI/CD Integration
 
-### GitHub Actions (with Code Scanning SARIF)
-
-Add Shipcheck to `.github/workflows/production-readiness.yml`:
+### GitHub Actions (with Code Scanning SARIF Upload)
 
 ```yaml
 name: Production Readiness Gate
@@ -184,13 +225,14 @@ on:
 
 jobs:
   shipcheck:
+    name: Shipcheck Readiness Scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write # Required for GitHub Code Scanning upload
+      security-events: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up Go
@@ -201,94 +243,47 @@ jobs:
       - name: Install Shipcheck
         run: go install github.com/deployxa/shipcheck/cmd/shipcheck@latest
 
-      - name: Run Shipcheck Scan
+      - name: Run Scan
         run: |
           shipcheck . \
             --severity-threshold high \
             --format sarif \
             --output shipcheck.sarif
 
-      - name: Upload to GitHub Code Scanning
+      - name: Upload SARIF to GitHub Security Tab
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: shipcheck.sarif
 ```
 
-Findings are automatically presented directly in Pull Request diffs and under the repository's **Security → Code scanning** tab.
-
-### GitLab CI
-
-```yaml
-stages:
-  - test
-
-shipcheck:
-  stage: test
-  image: golang:1.22
-  script:
-    - go install github.com/deployxa/shipcheck/cmd/shipcheck@latest
-    - shipcheck . --severity-threshold high --format json --output shipcheck-report.json
-  artifacts:
-    when: always
-    paths:
-      - shipcheck-report.json
-```
+Findings are surfaced directly inside Pull Request code review annotations and under your repository's **Security → Code scanning** dashboard.
 
 ---
 
-## ⚙️ Configuration
+## Documentation Index
 
-Shipcheck is zero-config by default. You can customize behavior by placing an optional `.shipcheck.yml` in your project root:
-
-```yaml
-# Set failure threshold: critical | high | medium | low | info (Default: high)
-severity_threshold: high
-
-# Additional directory names to exclude from analysis
-exclude:
-  - legacy
-  - e2e-fixtures
-  - vendor
-
-# Disable specific rules by ID if intentionally accepted
-disable_rules:
-  - SC-DCK-002 # Accept running as root in this specific container
-  - SC-PORT-001 # Accept specific host port binding
-
-# Skip reading real .env files for variable name discovery (Default: true)
-skip_real_dotenv: true
-```
-
-*Note: Typo protection is enabled—unrecognized configuration keys are rejected with an exit code of `2`.*
+| Document | Purpose |
+| :--- | :--- |
+| [CLI Reference](docs/cli.md) | Comprehensive specification of all CLI arguments, flags, and diagnostic streams. |
+| [Rule Catalogue](docs/rules.md) | Exhaustive list of rules, rationale, severity defaults, and exact remediations. |
+| [Configuration Reference](docs/configuration.md) | Configuration keys, inheritance rules, and validation behavior. |
+| [JSON Schema](docs/schema/shipcheck-report.v1.schema.json) | Formal JSON Schema definition for machine integration. |
+| [Architecture](docs/architecture.md) | Internal pipeline: fsutil → discovery → parse → envvar → rules → output. |
+| [Threat Model](docs/threat-model.md) | Security boundaries, symlink policies, and handling untrusted repositories. |
+| [False-Positive Methodology](docs/false-positives.md) | Calibration benchmarks against the synthetic test corpus. |
+| [Reproducible Fixtures](docs/fixtures.md) | Specification of the fixture corpus used for deterministic testing. |
 
 ---
 
-## 📖 Detailed Documentation
+## Contributing
 
-- [CLI Reference](docs/cli.md) — Complete flag reference and exit code semantics
-- [Rule Catalogue](docs/rules.md) — Comprehensive guide to every check and its remediation
-- [Configuration Reference](docs/configuration.md) — `.shipcheck.yml` options and schema
-- [JSON Schema Specification](docs/schema/) — Machine-readable output contract
-- [Threat Model & Security](docs/threat-model.md) — Untrusted code boundary guarantees
-- [False-Positive Philosophy](docs/false-positives.md) — Evidence vs heuristic grading
+Please review [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on local development, running the test gate (`make check`), and authoring new detection rules.
+
+For security reports, refer to [SECURITY.md](SECURITY.md).
 
 ---
 
-## 🤝 Contributing
+## License
 
-We welcome contributions of new rules, manifest parsers, and ecosystem integrations!
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup and how to author new rules.
-
----
-
-## 🛡️ Security
-
-For security vulnerability reports, please review our [Security Policy](SECURITY.md).
-
----
-
-## 📄 License
-
-Shipcheck is licensed under the [MIT License](LICENSE).  
-Copyright © 2026 Deployxa.
+[MIT](LICENSE) — Copyright © 2026 Deployxa.

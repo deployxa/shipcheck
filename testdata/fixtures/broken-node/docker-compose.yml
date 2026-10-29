@@ -1,0 +1,21 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:4000"
+    env_file:
+      - .env.missing
+    depends_on:
+      - db2
+    volumes:
+      - appdata:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+  worker:
+    image: busybox
+    network_mode: host
+    command: sh -c "while true; do sleep 1; done"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL}

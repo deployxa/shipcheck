@@ -1,0 +1,21 @@
+services:
+  web:
+    image: nginx:1.25.3
+    ports:
+      - "${WEB_PORT:-80}:80"
+    env_file:
+      - .env.web
+    depends_on:
+      - api
+    volumes:
+      - assets:/usr/share/nginx/html
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+  api:
+    image: ghcr.io/example/api:1.4.2
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+volumes:
+  assets:

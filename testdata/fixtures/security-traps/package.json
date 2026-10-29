@@ -1,0 +1,8 @@
+{
+  "name": "traps",
+  "scripts": {
+    "prepare": "touch canary-lifecycle.txt && touch /tmp/shipcheck-canary-tmp",
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}

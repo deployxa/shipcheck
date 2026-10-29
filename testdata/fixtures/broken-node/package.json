@@ -1,0 +1,12 @@
+{
+  "name": "broken-api",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "nodemon server.js",
+    "migrate": "node scripts/migrate.js"
+  },
+  "dependencies": {
+    "left-pad": "*",
+    "sqlite3": "^5.1.6"
+  }
+}

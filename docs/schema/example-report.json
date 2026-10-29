@@ -1,0 +1,330 @@
+{
+  "$schema": "https://deployxa.dev/schemas/shipcheck-report.v1.json",
+  "meta": {
+    "tool": "shipcheck",
+    "version": "0.1.0-rc1",
+    "schema": "v1",
+    "project_root": "/home/z/my-project/shipcheck/testdata/fixtures/broken-node",
+    "projects": [
+      "node:."
+    ],
+    "files_scanned": 7,
+    "duration_seconds": 0,
+    "incomplete": false,
+    "environment_variables": {
+      "referenced": [
+        "API_KEY",
+        "DATABASE_URL"
+      ],
+      "declared": [
+        "LEGACY_FLAG",
+        "LOG_LEVEL"
+      ],
+      "required": [
+        "API_KEY",
+        "DATABASE_URL"
+      ],
+      "optional": [],
+      "unresolved": [
+        "API_KEY",
+        "DATABASE_URL"
+      ]
+    },
+    "notes": [
+      "discovery: package.json without a lockfile; dependency analysis is limited (package.json)"
+    ]
+  },
+  "findings": [
+    {
+      "rule_id": "SC-GRD-001",
+      "title": "No SIGTERM handling evidence in service source",
+      "description": "No SIGTERM handler was found for a long-running service. During deploys the process is stopped: without graceful shutdown, in-flight requests are cut. Evidence for this rule is inherently weak — absence of a handler in scanned files does not prove the runtime lacks one (frameworks often install it).",
+      "severity": "low",
+      "confidence": "possible",
+      "check": "static",
+      "remediation": "Handle SIGTERM: stop accepting new connections, drain, then exit (Node: process.on('SIGTERM'); Python: signal/atexit or gunicorn graceful-timeout)."
+    },
+    {
+      "rule_id": "SC-DIS-002",
+      "title": "Real .env file present in repository",
+      "description": "A file named .env exists in the project. If it is committed, runtime secrets may leak into version control. Shipcheck does not read its values in static mode; presence alone is not proof of exposure.",
+      "severity": "low",
+      "confidence": "probable",
+      "check": "static",
+      "file": ".env",
+      "evidence": "file present; no .gitignore pattern covers .env",
+      "remediation": "Keep real environment values out of version control: commit .env.example templates instead and ensure .env is listed in .gitignore."
+    },
+    {
+      "rule_id": "SC-ENV-002",
+      "title": "Declared variable is never referenced by the code",
+      "description": "A template declares a variable that the scanned code never reads. It may be consumed by infrastructure the scan cannot see (reverse proxy, platform).",
+      "severity": "info",
+      "confidence": "possible",
+      "check": "static",
+      "file": ".env.example",
+      "line": 1,
+      "evidence": "LEGACY_FLAG declared here is never read by the scanned code",
+      "remediation": "Remove stale declarations or document the consumer."
+    },
+    {
+      "rule_id": "SC-DCK-002",
+      "title": "Container runs as root",
+      "description": "The Dockerfile declares no USER, so the container runs as root. Root inside the container is an additional blast radius if the application is compromised. Many workloads run as root safely; this is hardening advice, not a defect by itself.",
+      "severity": "medium",
+      "confidence": "probable",
+      "check": "static",
+      "file": "Dockerfile",
+      "remediation": "Create an unprivileged user and switch to it with USER before the entrypoint."
+    },
+    {
+      "rule_id": "SC-DCK-005",
+      "title": "No HEALTHCHECK in Dockerfile",
+      "description": "The Dockerfile declares no HEALTHCHECK. Orchestrators and compose then rely on external checks or TCP probes; absence of HEALTHCHECK does not mean the app is unhealthy.",
+      "severity": "info",
+      "confidence": "possible",
+      "check": "static",
+      "file": "Dockerfile",
+      "remediation": "If the platform benefits from it, add a HEALTHCHECK that queries a cheap internal endpoint."
+    },
+    {
+      "rule_id": "SC-DCK-001",
+      "title": "Base image is not pinned",
+      "description": "FROM uses no tag or the :latest tag. Rebuilds can silently move to a different base image, changing behaviour and breaking reproducibility. Note: a floating tag is a reproducibility risk, NOT evidence of a vulnerability.",
+      "severity": "low",
+      "confidence": "possible",
+      "check": "static",
+      "file": "Dockerfile",
+      "line": 1,
+      "evidence": "FROM node:latest",
+      "remediation": "Pin a specific version tag (or digest) and upgrade deliberately."
+    },
+    {
+      "rule_id": "SC-CTX-001",
+      "title": "Dockerfile COPY/ADD target missing from build context",
+      "description": "A COPY or ADD instruction references a file that does not exist in the build context (and is not excluded by .dockerignore rules). The image build will fail.",
+      "severity": "high",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "Dockerfile",
+      "line": 4,
+      "evidence": "COPY config/production.json — not present in build context ",
+      "remediation": "Add the missing file to the repository or fix the path in the Dockerfile."
+    },
+    {
+      "rule_id": "SC-DCK-004",
+      "title": "Remote script piped into a shell at build time",
+      "description": "A RUN instruction pipes curl/wget output into sh/bash. The build executes whatever the remote endpoint returns at that moment — an unverified supply-chain step in the image.",
+      "severity": "medium",
+      "confidence": "probable",
+      "check": "static",
+      "file": "Dockerfile",
+      "line": 5,
+      "evidence": "RUN curl -s https://example-installer.sh/install.sh | sh",
+      "remediation": "Download the artifact, verify a pinned checksum, then execute it."
+    },
+    {
+      "rule_id": "SC-DCK-003",
+      "title": "Shell-form entrypoint will not forward signals",
+      "description": "CMD or ENTRYPOINT uses shell form, wrapping the app in /bin/sh as PID 1. SIGTERM then reaches the shell, which does not forward it; the container gets SIGKILL after the grace period, cutting requests mid-flight.",
+      "severity": "medium",
+      "confidence": "probable",
+      "check": "static",
+      "file": "Dockerfile",
+      "line": 7,
+      "evidence": "CMD npm start",
+      "remediation": "Use the exec/JSON form (CMD [\"node\",\"server.js\"]) or run the app with an init that forwards signals (docker run --init, tini)."
+    },
+    {
+      "rule_id": "SC-CMP-001",
+      "title": "depends_on references an undefined service",
+      "description": "A compose service declares depends_on for a service that is not defined in the same file. `docker compose up` fails validation.",
+      "severity": "high",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\" depends_on \"db2\" — not defined in this file",
+      "remediation": "Define the missing service or remove the dependency entry."
+    },
+    {
+      "rule_id": "SC-CMP-002",
+      "title": "Named volume is not declared at top level",
+      "description": "A service mounts a named volume that has no top-level volumes declaration. Newer compose implementations reject the file.",
+      "severity": "high",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\" mounts volume \"appdata\" — not declared under top-level volumes",
+      "remediation": "Declare the volume under the top-level volumes: key."
+    },
+    {
+      "rule_id": "SC-CMP-003",
+      "title": "env_file points to a missing file",
+      "description": "A service references an env_file that does not exist in the repository. `docker compose up` fails or starts with an incomplete environment.",
+      "severity": "high",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\": env_file .env.missing not found",
+      "remediation": "Add the file or fix the path; commit a *template* (e.g. .env.production.example) for documentation."
+    },
+    {
+      "rule_id": "SC-CMP-005",
+      "title": "Privileged container",
+      "description": "A service runs with privileged: true, giving the container near-host capabilities. Some workloads (VPN, FUSE) require it; most do not.",
+      "severity": "high",
+      "confidence": "probable",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\"",
+      "remediation": "Remove privileged and grant only the specific capabilities needed."
+    },
+    {
+      "rule_id": "SC-CMP-006",
+      "title": "Host network mode",
+      "description": "A service uses network_mode: host, removing container/network isolation and port mapping semantics.",
+      "severity": "medium",
+      "confidence": "probable",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"worker\"",
+      "remediation": "Prefer a bridge network with explicit port mappings unless host networking is a documented requirement."
+    },
+    {
+      "rule_id": "SC-CMP-007",
+      "title": "Docker socket mounted into a container",
+      "description": "The host Docker socket (/var/run/docker.sock) is mounted into a service. Anything in that container can drive the host Docker daemon — effectively host root.",
+      "severity": "critical",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\": /var/run/docker.sock:/var/run/docker.sock",
+      "remediation": "Expose a narrow API proxy instead, or run the needing job on the host/outside the app stack."
+    },
+    {
+      "rule_id": "SC-ENV-004",
+      "title": "Compose interpolation variable is not declared",
+      "description": "A compose file interpolates ${VAR} but VAR is not declared in any template, making the compose file resolve differently per environment.",
+      "severity": "medium",
+      "confidence": "probable",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "${LOG_LEVEL} used in compose file",
+      "remediation": "Declare the variable in .env.example / deployment templates or give it an inline default (${VAR:-x})."
+    },
+    {
+      "rule_id": "SC-HLT-001",
+      "title": "No health check evidence for long-running service",
+      "description": "A long-running compose service has no compose healthcheck, no Dockerfile HEALTHCHECK, and no obvious health endpoint in the source. The platform will consider the service ready as soon as the process starts. This is informational: many simple services run fine without one.",
+      "severity": "info",
+      "confidence": "possible",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\" has no healthcheck",
+      "remediation": "Add a healthcheck (compose healthcheck.test or Dockerfile HEALTHCHECK) pointing at a cheap endpoint."
+    },
+    {
+      "rule_id": "SC-PORT-001",
+      "title": "Hardcoded host port in compose port mapping",
+      "description": "A compose service publishes a fixed host port. Fixed host ports collide across services/environments and cannot be remapped without editing the file.",
+      "severity": "low",
+      "confidence": "possible",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\": ports \"8080:4000\"",
+      "remediation": "Map host ports through an environment variable, e.g. \"${WEB_PORT:-8080}:80\"."
+    },
+    {
+      "rule_id": "SC-PORT-002",
+      "title": "EXPOSE does not match compose ports",
+      "description": "The Dockerfile EXPOSE declaration and the compose service port mapping disagree about the container-side port. One of the two files is stale; documentation value of EXPOSE is lost and health checks may target the wrong port.",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "docker-compose.yml",
+      "evidence": "service \"web\": maps container port 4000 but its Dockerfile EXPOSEs 3000",
+      "remediation": "Align the container-side port in the compose ports entry with the Dockerfile EXPOSE value."
+    },
+    {
+      "rule_id": "SC-BLD-001",
+      "title": "Development server used as production entrypoint",
+      "description": "The production entrypoint invokes a development server (next dev, vite, nodemon, webpack-dev-server, flask run, manage.py runserver, uvicorn --reload, npm run dev, …). Development servers are not built for production traffic, expose verbose errors, and often disable caching.",
+      "severity": "high",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "package.json",
+      "evidence": "\"start\": \"nodemon server.js\"",
+      "remediation": "Run the production build and serve it with the framework's production server or a WSGI/ASGI/HTTP server."
+    },
+    {
+      "rule_id": "SC-DEP-001",
+      "title": "Floating dependency version",
+      "description": "A dependency is declared as *, latest, an unpinned git URL, or (Python) without a version constraint. Floating versions make builds non-reproducible. This is NOT evidence of a vulnerability — only of reduced determinism.",
+      "severity": "low",
+      "confidence": "possible",
+      "check": "static",
+      "file": "package.json",
+      "evidence": "left-pad@*",
+      "remediation": "Pin versions (caret/tilde ranges for npm, == for Python) and rely on lockfiles for exactness."
+    },
+    {
+      "rule_id": "SC-SCR-001",
+      "title": "Package script references a missing file",
+      "description": "A package.json script invokes a local file that does not exist in the repository. `npm run <script>` will fail at the moment you need it most — during deploy.",
+      "severity": "high",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "package.json",
+      "evidence": "scripts[\"migrate\"] -> scripts/migrate.js",
+      "remediation": "Fix the path in the script or add the missing file (relative to .)."
+    },
+    {
+      "rule_id": "SC-ENV-001",
+      "title": "Referenced environment variable is not declared in any template",
+      "description": "The code reads an environment variable that no .env.example-style template, compose environment, or Dockerfile ENV/ARG declares. A missing variable at deploy time typically produces a runtime crash or a silent default. Absence from a template is not proof the variable is unset at runtime — that is why this is a probable finding, not a confirmed defect.",
+      "severity": "medium",
+      "confidence": "probable",
+      "check": "static",
+      "file": "server.js",
+      "line": 1,
+      "evidence": "API_KEY is read in 1 source location(s) but declared in no template",
+      "remediation": "Add the variable to the deployment templates and document whether it is required."
+    },
+    {
+      "rule_id": "SC-ENV-001",
+      "title": "Referenced environment variable is not declared in any template",
+      "description": "The code reads an environment variable that no .env.example-style template, compose environment, or Dockerfile ENV/ARG declares. A missing variable at deploy time typically produces a runtime crash or a silent default. Absence from a template is not proof the variable is unset at runtime — that is why this is a probable finding, not a confirmed defect.",
+      "severity": "medium",
+      "confidence": "probable",
+      "check": "static",
+      "file": "server.js",
+      "line": 2,
+      "evidence": "DATABASE_URL is read in 1 source location(s) but declared in no template",
+      "remediation": "Add the variable to the deployment templates and document whether it is required."
+    },
+    {
+      "rule_id": "SC-SEC-001",
+      "title": "AWS access key id committed",
+      "description": "A string matching the AWS access key id format (AKIA…) was found in a file.",
+      "severity": "critical",
+      "confidence": "confirmed",
+      "check": "static",
+      "file": "server.js",
+      "line": 3,
+      "evidence": "AKIA******** (len 20) — AWS access key id",
+      "remediation": "Revoke/rotate the credential, remove it from the file, and load it from a secret manager or environment."
+    },
+    {
+      "rule_id": "SC-SEC-009",
+      "title": "Hardcoded credential assignment",
+      "description": "An assignment to a name like password/secret/api_key with a literal string value was found. Common placeholder values are filtered; what remains needs human review and may be a dev-only fixture.",
+      "severity": "medium",
+      "confidence": "possible",
+      "check": "static",
+      "file": "server.js",
+      "line": 4,
+      "evidence": "hunt******** (len 21) — hardcoded credential assignment",
+      "remediation": "Read from environment or a secret manager instead; the value is masked in output."
+    }
+  ]
+}

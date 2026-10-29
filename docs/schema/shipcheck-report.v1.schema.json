@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://deployxa.dev/schemas/shipcheck-report.v1.json",
+  "title": "Shipcheck report",
+  "description": "Output of `shipcheck <project> --format json`. Version v1.",
+  "type": "object",
+  "required": ["$schema", "meta", "findings"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://deployxa.dev/schemas/shipcheck-report.v1.json"
+    },
+    "meta": {
+      "type": "object",
+      "required": ["tool", "version", "schema", "project_root", "projects", "files_scanned", "duration_seconds", "incomplete"],
+      "properties": {
+        "tool": { "type": "string", "const": "shipcheck" },
+        "version": { "type": "string" },
+        "schema": { "type": "string", "const": "v1" },
+        "project_root": { "type": "string" },
+        "projects": { "type": "array", "items": { "type": "string" } },
+        "files_scanned": { "type": "integer", "minimum": 0 },
+        "duration_seconds": { "type": "integer", "minimum": 0 },
+        "incomplete": { "type": "boolean" },
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "environment_variables": {
+          "type": "object",
+          "properties": {
+            "referenced": { "$ref": "#/definitions/nameList" },
+            "declared": { "$ref": "#/definitions/nameList" },
+            "required": { "$ref": "#/definitions/nameList" },
+            "optional": { "$ref": "#/definitions/nameList" },
+            "unresolved": { "$ref": "#/definitions/nameList" }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/finding" }
+    }
+  },
+  "definitions": {
+    "nameList": { "type": "array", "items": { "type": "string" }, "description": "Environment-variable NAMES only; never values." },
+    "finding": {
+      "type": "object",
+      "required": ["rule_id", "title", "description", "severity", "confidence", "check", "remediation"],
+      "properties": {
+        "rule_id": { "type": "string", "pattern": "^SC-[A-Z]+-[0-9]{3}$" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+        "confidence": { "enum": ["confirmed", "probable", "possible"] },
+        "check": { "enum": ["static", "validated", "inconclusive"] },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "evidence": { "type": "string", "description": "Sanitized evidence snippet; credential values are always masked." },
+        "remediation": { "type": "string" }
+      }
+    }
+  }
+}

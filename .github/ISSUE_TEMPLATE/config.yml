@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Reporting
+    url: https://github.com/deployxa/shipcheck/security/policy
+    about: Please report security vulnerabilities privately rather than opening public issues.
+  - name: Shipcheck Rule Catalogue
+    url: https://github.com/deployxa/shipcheck/blob/main/docs/rules.md
+    about: View all 46 active rules, their severity defaults, and remediation guidelines.

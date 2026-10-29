@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 180" width="900" height="180" fill="none">
+  <defs>
+    <linearGradient id="hdr-bg" x1="0" y1="0" x2="900" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0E1318"/>
+      <stop offset="50%" stop-color="#121820"/>
+      <stop offset="100%" stop-color="#0A0E12"/>
+    </linearGradient>
+    <linearGradient id="hdr-border" x1="0" y1="0" x2="900" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2D3A49"/>
+      <stop offset="50%" stop-color="#00F59B" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#2D3A49"/>
+    </linearGradient>
+    <pattern id="hdr-grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1B242E" stroke-width="0.75"/>
+    </pattern>
+    <linearGradient id="hdr-accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00E58F"/>
+      <stop offset="100%" stop-color="#00F59B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Card Background -->
+  <rect width="900" height="180" rx="12" fill="url(#hdr-bg)"/>
+  <rect width="900" height="180" rx="12" fill="url(#hdr-grid)" opacity="0.7"/>
+  <rect x="0.5" y="0.5" width="899" height="179" rx="11.5" stroke="url(#hdr-border)" stroke-width="1"/>
+
+  <!-- Left: Geometric Logo Icon -->
+  <g transform="translate(48, 38)">
+    <polygon points="52,12 88,32 88,72 52,92 16,72 16,32" fill="#080B0E" stroke="#303A46" stroke-width="1.8" stroke-linejoin="round"/>
+    <polygon points="52,14 85,32 52,50 19,32" fill="#1C2530" stroke="#303A46" stroke-width="1.2" stroke-linejoin="round"/>
+    <line x1="35" y1="23" x2="68" y2="41" stroke="#374352" stroke-width="1" stroke-dasharray="2 2"/>
+    <polygon points="19,33 52,51 52,89 19,71" fill="#11171E" stroke="#303A46" stroke-width="1.2" stroke-linejoin="round"/>
+    <line x1="30" y1="39" x2="30" y2="77" stroke="#222C37" stroke-width="1.2"/>
+    <line x1="41" y1="45" x2="41" y2="83" stroke="#222C37" stroke-width="1.2"/>
+    <polygon points="52,51 85,33 85,71 52,89" fill="#151D25" stroke="#303A46" stroke-width="1.2" stroke-linejoin="round"/>
+    <line x1="63" y1="45" x2="63" y2="83" stroke="#25303D" stroke-width="1.2"/>
+    <line x1="74" y1="39" x2="74" y2="77" stroke="#25303D" stroke-width="1.2"/>
+
+    <!-- Reticle Corners -->
+    <path d="M10,28 L10,22 L16,22" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M94,28 L94,22 L88,22" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M10,76 L10,82 L16,82" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M94,76 L94,82 L88,82" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+
+    <!-- Checkmark -->
+    <polyline points="35,60 47,72 78,36" fill="none" stroke="#080B0E" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="35,60 47,72 78,36" fill="none" stroke="url(#hdr-accent)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="78" cy="36" r="2.5" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Center Text / Wordmark -->
+  <g transform="translate(176, 42)">
+    <text x="0" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="46" font-weight="800" letter-spacing="-1.2" fill="#F0F6FC">ship<tspan fill="#00F59B">check</tspan></text>
+    <text x="2" y="70" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" letter-spacing="1.8" fill="#8B949E">PRE-DEPLOYMENT READINESS VERIFIER</text>
+    <text x="2" y="98" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="400" fill="#C9D1D9">Static topology analysis for Docker, Compose, environment variables, and deployment manifests.</text>
+  </g>
+
+  <!-- Right Decorative Specs Pill -->
+  <g transform="translate(730, 48)">
+    <rect x="0" y="0" width="122" height="26" rx="5" fill="#141D26" stroke="#253240" stroke-width="1"/>
+    <circle cx="12" cy="13" r="3.5" fill="#00F59B"/>
+    <text x="22" y="17" font-family="ui-monospace, monospace" font-size="10.5" font-weight="600" fill="#9AA4B2">ZERO RUNTIME</text>
+
+    <rect x="0" y="34" width="122" height="26" rx="5" fill="#141D26" stroke="#253240" stroke-width="1"/>
+    <circle cx="12" cy="47" r="3.5" fill="#00F59B"/>
+    <text x="22" y="51" font-family="ui-monospace, monospace" font-size="10.5" font-weight="600" fill="#9AA4B2">100% OFFLINE</text>
+
+    <rect x="0" y="68" width="122" height="26" rx="5" fill="#141D26" stroke="#253240" stroke-width="1"/>
+    <circle cx="12" cy="81" r="3.5" fill="#00F59B"/>
+    <text x="22" y="85" font-family="ui-monospace, monospace" font-size="10.5" font-weight="600" fill="#9AA4B2">SUB-50ms SCAN</text>
+  </g>
+</svg>

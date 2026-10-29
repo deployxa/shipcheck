@@ -1,0 +1,66 @@
+name: New Rule Proposal
+description: Propose a new production-readiness check or adjust an existing rule.
+labels: ["enhancement", "rules"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Shipcheck rules detect real-world deployment-halting conditions or operational anti-patterns based on concrete evidence.
+  - type: input
+    id: proposed_id
+    attributes:
+      label: Proposed Rule Category / ID
+      description: Follow the `SC-<CAT>-<NUM>` schema (e.g., `SC-DCK-006`, `SC-CMP-009`, `SC-ENV-005`).
+      placeholder: "e.g., SC-DCK-006"
+    validations:
+      required: true
+  - type: input
+    id: title
+    attributes:
+      label: Rule Title
+      placeholder: "e.g., Multi-stage Dockerfile missing final stage target"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Default Severity
+      options:
+        - critical (Guaranteed failure or severe security breach)
+        - high (Will fail orchestrator startup)
+        - medium (Operational anti-pattern or probable drift)
+        - low (Best-practice advisory)
+        - info (Diagnostic observation)
+    validations:
+      required: true
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: Default Confidence
+      options:
+        - confirmed (Direct structural or syntactic fact)
+        - probable (Strong evidence; platform context may vary)
+        - possible (Heuristic / requires human review)
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What problem does this condition cause in production?
+      description: Explain the failure mode (e.g. crash loop, security risk, broken rollouts).
+    validations:
+      required: true
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Concrete Remediation
+      description: How should the developer fix this condition?
+    validations:
+      required: true
+  - type: textarea
+    id: limitations
+    attributes:
+      label: Known Limitations & False-Positive Boundaries
+      description: When might this check be incorrect, and what can it not see statically?
+    validations:
+      required: true

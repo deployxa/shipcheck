@@ -1,0 +1,54 @@
+name: Bug Report
+description: Report unexpected behavior, false positives, or scan failures in Shipcheck.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Shipcheck. Please provide sufficient detail so we can reproduce the behavior locally.
+  - type: input
+    id: version
+    attributes:
+      label: Shipcheck Version
+      description: Run `shipcheck version` and paste the output.
+      placeholder: "e.g., Shipcheck 0.1.0-rc1 (commit a9521f2)"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System & Architecture
+      options:
+        - Linux (x86_64 / amd64)
+        - Linux (arm64 / aarch64)
+        - macOS (Apple Silicon / arm64)
+        - macOS (Intel / amd64)
+        - Windows (x86_64 / amd64)
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal Reproduction Steps
+      description: Describe the project layout or provide a minimal fixture that triggers the issue.
+      placeholder: |
+        1. Create directory structure with package.json and Dockerfile...
+        2. Run `shipcheck .`
+        3. Observe exit code or finding output...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should have happened according to documented rules or CLI specifications?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Output / Terminal Log
+      description: Include command invocation and stderr/stdout output (credentials are masked by default).
+      render: shell
+    validations:
+      required: true

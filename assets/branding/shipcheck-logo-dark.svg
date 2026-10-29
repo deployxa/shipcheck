@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 96" width="440" height="96" fill="none">
+  <defs>
+    <linearGradient id="logo-d-top" x1="48" y1="14" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#212A35"/>
+      <stop offset="100%" stop-color="#141B22"/>
+    </linearGradient>
+    <linearGradient id="logo-d-left" x1="18" y1="32" x2="48" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#182029"/>
+      <stop offset="100%" stop-color="#0E1318"/>
+    </linearGradient>
+    <linearGradient id="logo-d-right" x1="78" y1="32" x2="48" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1B242E"/>
+      <stop offset="100%" stop-color="#10161C"/>
+    </linearGradient>
+    <linearGradient id="logo-d-accent" x1="32" y1="58" x2="72" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00E58F"/>
+      <stop offset="100%" stop-color="#00F59B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ICON (48, 48 center, scaled 0.75 from 128) -->
+  <g transform="translate(12, 12)">
+    <!-- Base -->
+    <polygon points="36,6 68,24 68,60 36,78 4,60 4,24" fill="#080B0E" stroke="#303A46" stroke-width="1.5" stroke-linejoin="round"/>
+    <!-- Top Face -->
+    <polygon points="36,7 65,24 36,41 7,24" fill="url(#logo-d-top)" stroke="#303A46" stroke-width="1" stroke-linejoin="round"/>
+    <line x1="21" y1="16" x2="50" y2="33" stroke="#374352" stroke-width="0.8" stroke-dasharray="2 2"/>
+    <!-- Left Face -->
+    <polygon points="7,25 36,42 36,76 7,59" fill="url(#logo-d-left)" stroke="#303A46" stroke-width="1" stroke-linejoin="round"/>
+    <line x1="17" y1="31" x2="17" y2="65" stroke="#222C37" stroke-width="1"/>
+    <line x1="26" y1="36" x2="26" y2="70" stroke="#222C37" stroke-width="1"/>
+    <!-- Right Face -->
+    <polygon points="36,42 65,25 65,59 36,76" fill="url(#logo-d-right)" stroke="#303A46" stroke-width="1" stroke-linejoin="round"/>
+    <line x1="46" y1="36" x2="46" y2="70" stroke="#25303D" stroke-width="1"/>
+    <line x1="55" y1="31" x2="55" y2="65" stroke="#25303D" stroke-width="1"/>
+
+    <!-- Reticle Corners -->
+    <path d="M0,20 L0,14 L6,14" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M72,20 L72,14 L66,14" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M0,64 L0,70 L6,70" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M72,64 L72,70 L66,70" stroke="#485666" stroke-width="1.2" stroke-linecap="round"/>
+
+    <!-- Verification Checkmark -->
+    <polyline points="21,48 32,59 59,27" fill="none" stroke="#080B0E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="21,48 32,59 59,27" fill="none" stroke="url(#logo-d-accent)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="59" cy="27" r="2" fill="#FFFFFF"/>
+  </g>
+
+  <!-- WORDMARK -->
+  <g transform="translate(108, 0)">
+    <!-- "shipcheck" Title -->
+    <text x="0" y="52" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Text', Roboto, Helvetica, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.8" fill="#F0F6FC">ship<tspan fill="#00F59B">check</tspan></text>
+    
+    <!-- Monospaced Category Subtitle -->
+    <text x="1" y="74" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="11" font-weight="500" letter-spacing="1.8" fill="#8B949E">PRE-DEPLOYMENT READINESS VERIFIER</text>
+  </g>
+</svg>

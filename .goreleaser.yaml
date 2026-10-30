@@ -1,0 +1,66 @@
+# GoReleaser configuration for Shipcheck
+version: 2
+
+project_name: shipcheck
+
+before:
+  hooks:
+    - go mod tidy
+    - make check
+
+builds:
+  - id: shipcheck
+    main: ./cmd/shipcheck
+    binary: shipcheck
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/deployxa/shipcheck/internal/cli.Version={{ .Version }}
+      - -X github.com/deployxa/shipcheck/internal/cli.Commit={{ .Commit }}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: "shipcheck-{{ .Version }}-checksums.sha256"
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+
+dockers:
+  - image_templates:
+      - "ghcr.io/deployxa/shipcheck:{{ .Version }}"
+      - "ghcr.io/deployxa/shipcheck:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Pre-deployment readiness and topology verification"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+brews:
+  - repository:
+      owner: deployxa
+      name: homebrew-tap
+    homepage: "https://github.com/deployxa/shipcheck"
+    description: "Open-source pre-deployment readiness and topology verification"
+    license: "MIT"
+    install: |
+      bin.install "shipcheck"

@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -85,5 +86,38 @@ func TestDiscoveryExcludesBuildDirs(t *testing.T) {
 func TestCIFileDetection(t *testing.T) {
 	if !isCIFile(".github/workflows/ci.yml") || !isCIFile(".gitlab-ci.yml") || isCIFile("docs/ci.yml") {
 		t.Fatal("CI file classification wrong")
+	}
+}
+
+func TestGoAndRustDiscovery(t *testing.T) {
+	tmp := t.TempDir()
+	goDir := filepath.Join(tmp, "services", "backend")
+	rustDir := filepath.Join(tmp, "services", "worker")
+	if err := os.MkdirAll(goDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(rustDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	os.WriteFile(filepath.Join(goDir, "go.mod"), []byte("module github.com/example/backend\n\ngo 1.22\n"), 0o644)
+	os.WriteFile(filepath.Join(goDir, "go.sum"), []byte(""), 0o644)
+
+	os.WriteFile(filepath.Join(rustDir, "Cargo.toml"), []byte("[package]\nname = \"worker\"\nversion = \"0.1.0\"\n"), 0o644)
+	os.WriteFile(filepath.Join(rustDir, "Cargo.lock"), []byte(""), 0o644)
+
+	r := Discover(tmp)
+	if len(r.GoApps) != 1 {
+		t.Fatalf("want 1 go app, got %d", len(r.GoApps))
+	}
+	if r.GoApps[0].Module != "github.com/example/backend" || r.GoApps[0].Lockfile != "go.sum" {
+		t.Fatalf("unexpected go app: %+v", r.GoApps[0])
+	}
+
+	if len(r.RustApps) != 1 {
+		t.Fatalf("want 1 rust app, got %d", len(r.RustApps))
+	}
+	if r.RustApps[0].Name != "worker" || r.RustApps[0].Lockfile != "Cargo.lock" {
+		t.Fatalf("unexpected rust app: %+v", r.RustApps[0])
 	}
 }

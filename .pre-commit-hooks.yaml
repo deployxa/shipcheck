@@ -1,0 +1,9 @@
+- id: shipcheck
+  name: Shipcheck
+  description: Static pre-deployment readiness and topology verification
+  entry: shipcheck
+  language: golang
+  additional_dependencies: ['github.com/deployxa/shipcheck/cmd/shipcheck@latest']
+  pass_filenames: false
+  always_run: true
+  args: ['.', '--severity-threshold', 'high']

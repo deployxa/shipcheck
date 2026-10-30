@@ -49,6 +49,8 @@ func Run(in Input) Output {
 	e.runEnvFindings()
 	e.runSourceRules()
 	e.runSecretRules()
+	e.runCustomRules()
+	e.filterSuppressions()
 	sortFindings(e.findings)
 	return Output{Findings: e.findings, Env: e.env}
 }
@@ -491,4 +493,70 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n-1] + "…"
+}
+
+func (e *engine) runCustomRules() {
+	if e.in.Cfg == nil || len(e.in.Cfg.CustomRules) == 0 {
+		return
+	}
+	for _, cr := range e.in.Cfg.CustomRules {
+		if cr.ID == "" || cr.Pattern == "" || e.in.Cfg.IsDisabled(cr.ID) {
+			continue
+		}
+		rx, err := regexp.Compile(cr.Pattern)
+		if err != nil {
+			continue
+		}
+		sev := model.ParseSeverity(cr.Severity)
+		if sev == "" {
+			sev = model.SevMedium
+		}
+		conf := model.Confidence(strings.ToLower(cr.Confidence))
+		if conf != model.ConfConfirmed && conf != model.ConfProbable && conf != model.ConfPossible {
+			conf = model.ConfProbable
+		}
+
+		for _, f := range e.in.Files {
+			if !fileMatchesPatterns(f.RelPath, cr.Files) {
+				continue
+			}
+			content, ok := e.contentOf(f.RelPath)
+			if !ok {
+				continue
+			}
+			lines := strings.Split(content, "\n")
+			for idx, line := range lines {
+				if rx.MatchString(line) {
+					e.findings = append(e.findings, model.Finding{
+						RuleID:      cr.ID,
+						Title:       cr.Title,
+						Description: cr.Description,
+						Severity:    sev,
+						Confidence:  conf,
+						Check:       model.ChkStatic,
+						File:        f.RelPath,
+						Line:        idx + 1,
+						Evidence:    truncate(strings.TrimSpace(line), 160),
+						Remediation: cr.Remediation,
+					})
+				}
+			}
+		}
+	}
+}
+
+func fileMatchesPatterns(rel string, patterns []string) bool {
+	if len(patterns) == 0 {
+		return true
+	}
+	base := filepath.Base(rel)
+	for _, p := range patterns {
+		if m, _ := filepath.Match(p, rel); m {
+			return true
+		}
+		if m, _ := filepath.Match(p, base); m {
+			return true
+		}
+	}
+	return false
 }

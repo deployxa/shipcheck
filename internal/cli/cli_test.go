@@ -364,3 +364,49 @@ func TestDockerValidateWithoutDockerIsHonest(t *testing.T) {
 	}
 	_ = code
 }
+
+func TestBaselineFilter(t *testing.T) {
+	tmp := t.TempDir()
+	baselinePath := filepath.Join(tmp, "baseline.json")
+
+	// Step 1: Scan broken-node without baseline, saving output to baseline.json -> exit 1
+	code1, _, _ := runCLI(t, fixture("broken-node"), "--format", "json", "--output", baselinePath)
+	if code1 != ExitFindings {
+		t.Fatalf("first scan: exit = %d, want 1", code1)
+	}
+
+	// Step 2: Re-run scan passing --baseline baseline.json -> all findings filtered -> exit 0
+	code2, out2, _ := runCLI(t, fixture("broken-node"), "--format", "json", "--baseline", baselinePath)
+	if code2 != ExitOK {
+		t.Fatalf("baseline scan: exit = %d, want 0", code2)
+	}
+
+	var doc struct {
+		Findings []json.RawMessage `json:"findings"`
+		Meta     struct {
+			Notes []string `json:"notes"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(out2), &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(doc.Findings) != 0 {
+		t.Fatalf("expected 0 new findings, got %d", len(doc.Findings))
+	}
+	sawNote := false
+	for _, n := range doc.Meta.Notes {
+		if strings.Contains(n, "baseline:") {
+			sawNote = true
+			break
+		}
+	}
+	if !sawNote {
+		t.Fatalf("expected note about baseline filtering in meta.notes, got %v", doc.Meta.Notes)
+	}
+
+	// Step 3: Bad baseline file -> exit 2 (ExitUsage)
+	code3, _, _ := runCLI(t, fixture("broken-node"), "--baseline", filepath.Join(tmp, "nonexistent.json"))
+	if code3 != ExitUsage {
+		t.Fatalf("nonexistent baseline: exit = %d, want 2", code3)
+	}
+}

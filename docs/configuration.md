@@ -23,6 +23,16 @@ disable_rules:
 # Default: true (skipped). Names from a real .env are still useful for
 # env-var comparison, but Shipcheck refuses to touch values by default.
 skip_real_dotenv: true
+
+# Custom declarative rules for organization policies
+custom_rules:
+  - id: "CUSTOM-001"
+    title: "No plaintext database passwords in compose"
+    severity: "high"         # critical | high | medium | low | info
+    confidence: "confirmed"  # confirmed | probable | possible
+    files: ["*compose*.yml", "*compose*.yaml"]
+    pattern: "POSTGRES_PASSWORD:\\s*['\"]?[a-zA-Z0-9]+"
+    remediation: "Use variable interpolation or Docker secrets."
 ```
 
 ## Fields
@@ -33,6 +43,7 @@ skip_real_dotenv: true
 | `exclude` | string list | *(built-ins)* | Additional directory names to skip during discovery. Names only, not globs. |
 | `disable_rules` | string list | *(none)* | Rule IDs (exact, e.g. `SC-DCK-001`) that will not run. |
 | `skip_real_dotenv` | bool | `true` | When `false`, Shipcheck reads real `.env` files — for their **names only** — to improve env-var matching. Values are never emitted anywhere. |
+| `custom_rules` | list of objects | *(none)* | Declarative regex rules targeting specific file patterns. |
 
 ## Validation behaviour
 

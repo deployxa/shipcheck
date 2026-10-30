@@ -36,6 +36,21 @@ type PythonApp struct {
 	Lockfile     string
 }
 
+// GoApp is the modeled subset of Go modules.
+type GoApp struct {
+	RelDir    string
+	Module    string
+	GoVersion string
+	Lockfile  string // go.sum
+}
+
+// RustApp is the modeled subset of Cargo manifests.
+type RustApp struct {
+	RelDir   string
+	Name     string
+	Lockfile string // Cargo.lock
+}
+
 // ComposeFile locates a compose file and its parse result is handled by the
 // rules layer; discovery only records positions.
 type ComposeFile struct {
@@ -71,6 +86,8 @@ type Result struct {
 	Root        string
 	NodeApps    []NodeApp
 	PythonApps  []PythonApp
+	GoApps      []GoApp
+	RustApps    []RustApp
 	Dockerfiles []DockerfileLoc
 	Composes    []ComposeFile
 	EnvTpls     []EnvTemplate
@@ -85,7 +102,7 @@ type Result struct {
 
 // HasManifest reports whether any deployable manifest was found.
 func (r *Result) HasManifests() bool {
-	return len(r.NodeApps) > 0 || len(r.PythonApps) > 0 || len(r.Dockerfiles) > 0 || len(r.Composes) > 0
+	return len(r.NodeApps) > 0 || len(r.PythonApps) > 0 || len(r.GoApps) > 0 || len(r.RustApps) > 0 || len(r.Dockerfiles) > 0 || len(r.Composes) > 0
 }
 
 // manifest names recognized during the walk.
@@ -166,6 +183,20 @@ func Discover(root string) *Result {
 			app := r.pythonAppFor(dir)
 			app.Requirements = append(app.Requirements, f.RelPath)
 			app.Lockfile = detectPyLock(w.Files, dir)
+		case base == "go.mod":
+			app := GoApp{RelDir: dir}
+			if data, _, err := fsutil.ReadFile(f.Path); err == nil {
+				app.Module, app.GoVersion = parseGoMod(data)
+			}
+			app.Lockfile = findSibling(w.Files, dir, "go.sum")
+			r.GoApps = append(r.GoApps, app)
+		case base == "Cargo.toml":
+			app := RustApp{RelDir: dir}
+			if data, _, err := fsutil.ReadFile(f.Path); err == nil {
+				app.Name = parseCargoToml(data)
+			}
+			app.Lockfile = findSibling(w.Files, dir, "Cargo.lock")
+			r.RustApps = append(r.RustApps, app)
 		case strings.HasPrefix(lower, dockerfilePrefix) && !strings.Contains(base, "."):
 			r.Dockerfiles = append(r.Dockerfiles, DockerfileLoc{RelPath: f.RelPath, Dir: dir})
 		case composeNames[lower]:
@@ -261,6 +292,53 @@ func detectPyLock(files []fsutil.File, dir string) string {
 			b := filepath.Base(f.RelPath)
 			if b == "poetry.lock" || b == "uv.lock" || b == "Pipfile.lock" {
 				return b
+			}
+		}
+	}
+	return ""
+}
+
+func findSibling(files []fsutil.File, dir, targetName string) string {
+	if dir == "." {
+		dir = ""
+	}
+	for _, f := range files {
+		fdir := filepath.ToSlash(filepath.Dir(f.RelPath))
+		if fdir == "." {
+			fdir = ""
+		}
+		if fdir == dir && filepath.Base(f.RelPath) == targetName {
+			return targetName
+		}
+	}
+	return ""
+}
+
+func parseGoMod(content string) (module string, goVersion string) {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "module ") {
+			module = strings.TrimSpace(strings.TrimPrefix(line, "module"))
+		} else if strings.HasPrefix(line, "go ") {
+			goVersion = strings.TrimSpace(strings.TrimPrefix(line, "go"))
+		}
+	}
+	return
+}
+
+func parseCargoToml(content string) string {
+	inPackage := false
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			inPackage = (line == "[package]")
+			continue
+		}
+		if inPackage && strings.HasPrefix(line, "name") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				val := strings.TrimSpace(parts[1])
+				return strings.Trim(val, `"'`)
 			}
 		}
 	}

@@ -85,6 +85,7 @@ Flags:
   --docker-validate            Additionally run `+"`docker compose config`"+` on compose files (requires Docker;
                                never builds or runs your containers; reports honestly when Docker is unavailable)
   --config string              Path to config file (default: .shipcheck.yml in the project root)
+  --baseline string            Path to baseline report JSON; only new findings are reported
 
 Exit codes:
   0 no findings at/above threshold   1 findings at/above threshold
@@ -98,7 +99,7 @@ Docs: https://github.com/deployxa/shipcheck
 // ---- scan --------------------------------------------------------------------
 
 // valueFlags are flags that consume the following argument.
-var valueFlags = map[string]bool{"--format": true, "--output": true, "--severity-threshold": true, "--config": true}
+var valueFlags = map[string]bool{"--format": true, "--output": true, "--severity-threshold": true, "--config": true, "--baseline": true}
 
 // reorderArgs hoists flags (and their values) to the front so the Go flag
 // package tolerates `shipcheck ./app --format json` as well as the reverse.
@@ -131,6 +132,7 @@ func cmdScan(argv []string, stdout, stderr io.Writer) int {
 	threshold := fs.String("severity-threshold", "high", "exit-1 threshold severity")
 	dockerValidate := fs.Bool("docker-validate", false, "run docker compose config on compose files")
 	cfgPath := fs.String("config", "", "path to config file")
+	baselinePath := fs.String("baseline", "", "path to baseline report JSON; only new findings are reported")
 	// Accept flags both before and after the positional project root.
 	if err := fs.Parse(reorderArgs(argv)); err != nil {
 		return ExitUsage
@@ -169,6 +171,28 @@ func cmdScan(argv []string, stdout, stderr io.Writer) int {
 	start := model.Now()
 	report := runScan(abs, cfgRes, *dockerValidate, stderr)
 	report.Meta.DurationSec = int64(time.Since(start).Round(time.Second) / time.Second)
+
+	if *baselinePath != "" {
+		baselineFindings, err := loadBaseline(*baselinePath)
+		if err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return ExitUsage
+		}
+		var newFindings []model.Finding
+		suppressed := 0
+		for _, f := range report.Findings {
+			k := baselineKey(f)
+			if baselineFindings[k] {
+				suppressed++
+				continue
+			}
+			newFindings = append(newFindings, f)
+		}
+		report.Findings = newFindings
+		if suppressed > 0 {
+			report.Meta.Notes = append(report.Meta.Notes, fmt.Sprintf("baseline: %d existing finding(s) filtered by %s", suppressed, filepath.Base(*baselinePath)))
+		}
+	}
 
 	// Choose exit code before rendering so every format agrees.
 	code := ExitOK
@@ -215,6 +239,26 @@ func writeReport(outPath string, stdout io.Writer, r *model.Report, fn func(io.W
 	}
 	fmt.Fprintf(os.Stderr, "report written to %s\n", abs)
 	return nil
+}
+
+func baselineKey(f model.Finding) string {
+	return fmt.Sprintf("%s|%s|%d", f.RuleID, f.File, f.Line)
+}
+
+func loadBaseline(path string) (map[string]bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read baseline file: %w", err)
+	}
+	var rep model.Report
+	if err := json.Unmarshal(data, &rep); err != nil {
+		return nil, fmt.Errorf("malformed baseline report JSON: %w", err)
+	}
+	set := make(map[string]bool, len(rep.Findings))
+	for _, f := range rep.Findings {
+		set[baselineKey(f)] = true
+	}
+	return set, nil
 }
 
 // runScan performs discovery, rules and optional validation.
@@ -282,6 +326,26 @@ func projectLabels(d *discovery.Result) []string {
 		}
 		if !seen[l] {
 			labels = append(labels, "python:"+l)
+			seen[l] = true
+		}
+	}
+	for _, g := range d.GoApps {
+		l := g.RelDir
+		if l == "" {
+			l = "."
+		}
+		if !seen[l] {
+			labels = append(labels, "go:"+l)
+			seen[l] = true
+		}
+	}
+	for _, r := range d.RustApps {
+		l := r.RelDir
+		if l == "" {
+			l = "."
+		}
+		if !seen[l] {
+			labels = append(labels, "rust:"+l)
 			seen[l] = true
 		}
 	}

@@ -14,6 +14,7 @@ directory; it is the only required argument.
 | `--severity-threshold` | `critical`, `high`, `medium`, `low`, `info` | `high` | Exit `1` when at least one finding is at or above this severity. |
 | `--docker-validate` | boolean | off | Additionally run `docker compose config` on every discovered compose file. Requires the Docker CLI and daemon; never builds or runs your containers; reports honestly (inconclusive) when Docker is unavailable. |
 | `--config` | path | `.shipcheck.yml` in the project root | Explicit config file path. Must stay inside the project root. |
+| `--baseline` | path | *(none)* | Path to previous baseline JSON report; filters out known existing findings. |
 
 Flags may appear before or after the project root.
 

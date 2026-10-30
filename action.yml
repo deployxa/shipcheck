@@ -1,0 +1,77 @@
+name: 'Shipcheck Pre-Deployment Verification'
+description: 'Verify deployment readiness, container hygiene, and cross-manifest topologies before shipping'
+author: 'Deployxa'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  path:
+    description: 'Path to the application repository or project root to scan'
+    required: false
+    default: '.'
+  severity-threshold:
+    description: 'Minimum severity level that triggers an exit code 1 (info|low|medium|high|critical)'
+    required: false
+    default: 'high'
+  format:
+    description: 'Report format (text|json|sarif)'
+    required: false
+    default: 'sarif'
+  output:
+    description: 'File path to write the report to'
+    required: false
+    default: 'shipcheck.sarif'
+  config:
+    description: 'Explicit path to .shipcheck.yml configuration file'
+    required: false
+    default: ''
+  baseline:
+    description: 'Path to baseline report JSON; only new findings are reported'
+    required: false
+    default: ''
+  docker-validate:
+    description: 'Run docker compose config validation on compose files'
+    required: false
+    default: 'false'
+  version:
+    description: 'Shipcheck version to install (e.g. latest or v0.1.0-rc1)'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Install Shipcheck
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          go install github.com/deployxa/shipcheck/cmd/shipcheck@latest
+        else
+          go install github.com/deployxa/shipcheck/cmd/shipcheck@${{ inputs.version }}
+        fi
+
+    - name: Run Shipcheck Scan
+      shell: bash
+      run: |
+        ARGS="${{ inputs.path }} --severity-threshold ${{ inputs.severity-threshold }} --format ${{ inputs.format }}"
+        if [ -n "${{ inputs.output }}" ]; then
+          ARGS="$ARGS --output ${{ inputs.output }}"
+        fi
+        if [ -n "${{ inputs.config }}" ]; then
+          ARGS="$ARGS --config ${{ inputs.config }}"
+        fi
+        if [ -n "${{ inputs.baseline }}" ]; then
+          ARGS="$ARGS --baseline ${{ inputs.baseline }}"
+        fi
+        if [ "${{ inputs.docker-validate }}" = "true" ]; then
+          ARGS="$ARGS --docker-validate"
+        fi
+        echo "Executing: shipcheck $ARGS"
+        shipcheck $ARGS

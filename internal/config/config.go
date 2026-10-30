@@ -15,6 +15,18 @@ import (
 // Default names searched in the project root, in order.
 var ConfigNames = []string{".shipcheck.yml", ".shipcheck.yaml", "shipcheck.yml", "shipcheck.yaml"}
 
+// CustomRule allows declarative regex-based rules defined in .shipcheck.yml.
+type CustomRule struct {
+	ID          string   `yaml:"id"`
+	Title       string   `yaml:"title"`
+	Severity    string   `yaml:"severity"`
+	Confidence  string   `yaml:"confidence"`
+	Description string   `yaml:"description"`
+	Remediation string   `yaml:"remediation"`
+	Files       []string `yaml:"files"`
+	Pattern     string   `yaml:"pattern"`
+}
+
 // Config is the modeled configuration surface. Keep it small on purpose —
 // every field must be documented in docs/configuration.md.
 type Config struct {
@@ -24,7 +36,8 @@ type Config struct {
 	// SkipRealDotenv controls whether real .env files are loaded for env-var
 	// name collection. Default true: Shipcheck does not read real .env
 	// unless the project explicitly opts in.
-	SkipRealDotenv *bool `yaml:"skip_real_dotenv"`
+	SkipRealDotenv *bool        `yaml:"skip_real_dotenv"`
+	CustomRules    []CustomRule `yaml:"custom_rules"`
 }
 
 // SkipDotenv resolves the effective skip_real_dotenv value.

@@ -41,6 +41,23 @@ In Application Code:
 const token = process.env.RUNNER_INTERNAL_TOKEN; // shipcheck:ignore SC-ENV-001
 ```
 
+### Expirable Suppressions (`until=YYYY-MM-DD`)
+
+To prevent ignore comments from rotting into permanent tech debt that reviewers stop trusting, Shipcheck supports optional expiration dates on all suppression directives:
+
+```dockerfile
+# Suppression is active until December 31, 2026; after that date it fails the build:
+FROM alpine:3.19 # shipcheck:ignore SC-DCK-001 until=2026-12-31
+
+# Expired suppression on a legacy service:
+USER root # shipcheck:ignore SC-DCK-002 until=2026-06-30
+```
+
+When an `until` date has passed:
+1. The suppression expires immediately.
+2. Shipcheck reports the finding again, annotating the evidence: `(suppression expired on YYYY-MM-DD)`.
+3. CI gates fail if the finding breaches the configured severity threshold.
+
 ### Next-Line Suppression (`shipcheck:ignore-next-line`)
 
 Place the directive on the line immediately preceding the target line:
@@ -97,7 +114,8 @@ In subsequent CI runs or local scans, pass the `--baseline` flag:
 shipcheck ./my-app --baseline .shipcheck-baseline.json --severity-threshold high
 ```
 
-- Any finding matching `(RuleID, File, Line)` in the baseline file is filtered out.
+- **Resilient Fingerprinting:** Shipcheck matches baseline findings not only by exact line position, but by an ESLint-style semantic content fingerprint: `hash(RuleID, File, NormalizedEvidence)`.
+- **Refactor Proof:** If code is refactored and line numbers shift, existing defects remain suppressed as long as the underlying finding evidence is unchanged.
 - Only **newly introduced** findings will be reported and evaluated against `--severity-threshold`.
 - If zero new findings exist, Shipcheck exits with code `0`.
 - The number of filtered baseline findings is noted in `meta.notes`.

@@ -409,4 +409,19 @@ func TestBaselineFilter(t *testing.T) {
 	if code3 != ExitUsage {
 		t.Fatalf("nonexistent baseline: exit = %d, want 2", code3)
 	}
+
+	// Step 4: Verify resilient fingerprinting handles line shifts
+	baselineSet := map[string]bool{
+		baselineFingerprint("SC-BLD-001", "package.json", `"start": "nodemon server.js"`): true,
+	}
+	// Shift line from 6 to 999
+	shiftedFinding := model.Finding{
+		RuleID:   "SC-BLD-001",
+		File:     "package.json",
+		Line:     999,
+		Evidence: `"start": "nodemon server.js"`,
+	}
+	if !isBaselineMatch(baselineSet, shiftedFinding) {
+		t.Fatal("expected finding with shifted line to match baseline via fingerprint")
+	}
 }

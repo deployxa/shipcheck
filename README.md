@@ -219,19 +219,34 @@ Exit condition: 3 finding(s) at or above high threshold (exit 1)
 curl -sSL https://raw.githubusercontent.com/deployxa/shipcheck/main/scripts/install.sh | sh
 ```
 
-### Option 2: Using `go install` (Go 1.22+)
+### Option 2: Homebrew (macOS & Linux)
 
 ```bash
-go install github.com/deployxa/shipcheck/cmd/shipcheck@latest
+brew install deployxa/tap/shipcheck
 ```
 
-### Option 3: Official Container Image
+### Option 3: Official GitHub Action
+
+Add to any GitHub Actions workflow (`.github/workflows/production-readiness.yml`):
+
+```yaml
+- name: Shipcheck Readiness Scan
+  uses: deployxa/shipcheck@v0.1.0-rc1
+```
+
+### Option 4: Official Container Image
 
 ```bash
 docker run --rm -v "$(pwd):/app" ghcr.io/deployxa/shipcheck:latest /app
 ```
 
-### Option 4: Prebuilt Static Binaries
+### Option 5: Using `go install` (Go 1.22+)
+
+```bash
+go install github.com/deployxa/shipcheck/cmd/shipcheck@v0.1.0-rc1
+```
+
+### Option 6: Prebuilt Static Binaries
 
 Download pre-compiled binaries from the [GitHub Releases](https://github.com/deployxa/shipcheck/releases) page:
 
@@ -374,9 +389,9 @@ Shipcheck conforms to a deterministic Unix exit code specification suitable for 
 
 ## CI/CD Integration
 
-### Official GitHub Action (with SARIF Inline PR Annotations)
+### Turnkey GitHub Action (Zero Setup + Auto SARIF Annotations)
 
-Use the official composite GitHub Action in `.github/workflows/production-readiness.yml`:
+Add to `.github/workflows/production-readiness.yml`:
 
 ```yaml
 name: Production Readiness Gate
@@ -392,26 +407,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write # Required for SARIF PR annotations
+      security-events: write # Required for automated SARIF PR annotations
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Run Shipcheck Action
-        uses: deployxa/shipcheck@main
+      - name: Run Shipcheck
+        uses: deployxa/shipcheck@v0.1.0-rc1
         with:
-          path: '.'
           severity-threshold: 'high'
-          format: 'sarif'
-          output: 'shipcheck.sarif'
-
-      - name: Upload SARIF to GitHub Security Tab
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: shipcheck.sarif
 ```
+
+*The action automatically installs the prebuilt binary in ~2 seconds, executes the scan, and uploads the SARIF report to GitHub Code Scanning so findings appear directly as inline Pull Request review annotations.*
 
 ### Pre-Commit Hook
 
@@ -452,16 +460,17 @@ Shipcheck is designed around a single-pass, read-only pipeline with isolated pac
 ### Completed (v0.1.0-rc1)
 - [x] Recursive project discovery for Node.js, Python, Go (`go.mod`), Rust (`Cargo.toml`), Docker, Compose, and Procfiles.
 - [x] Core rules engine with 46 rules across 14 operational categories.
-- [x] Inline comment suppressions (`# shipcheck:ignore`, `# shipcheck:ignore-next-line`, `# shipcheck:ignore-file`).
-- [x] Baseline scanning mode (`--baseline`) for legacy codebase adoption.
+- [x] Inline comment suppressions with expiration dates (`# shipcheck:ignore SC-DCK-002 until=2026-12-31`).
+- [x] Baseline scanning mode (`--baseline`) with resilient semantic fingerprinting.
 - [x] Declarative custom regex rules in `.shipcheck.yml`.
 - [x] Machine-readable versioned JSON (`v1`) and SARIF 2.1.0 output.
-- [x] Official GitHub Action (`action.yml`), pre-commit hook (`.pre-commit-hooks.yaml`), and GoReleaser config.
+- [x] Turnkey GitHub Action (`action.yml`) with automated SARIF upload and fast binary caching.
+- [x] Pre-commit hook (`.pre-commit-hooks.yaml`), official container image, and one-liner installer.
 - [x] Native parser fuzzing suite and sub-5ms scan benchmarks.
 
 ### In Progress
-- [ ] Homebrew tap packaging (`brew install deployxa/tap/shipcheck`).
-- [ ] Editor-level LSP / watch mode (`--watch`).
+- [ ] Watch mode (`shipcheck --watch`) for real-time terminal feedback on file changes.
+- [ ] Editor-level LSP extension.
 
 ### Proposed
 - [ ] Native WebAssembly playground for live browser scanning.

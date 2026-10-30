@@ -10,6 +10,7 @@
 package cli
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -181,8 +182,7 @@ func cmdScan(argv []string, stdout, stderr io.Writer) int {
 		var newFindings []model.Finding
 		suppressed := 0
 		for _, f := range report.Findings {
-			k := baselineKey(f)
-			if baselineFindings[k] {
+			if isBaselineMatch(baselineFindings, f) {
 				suppressed++
 				continue
 			}
@@ -241,8 +241,27 @@ func writeReport(outPath string, stdout io.Writer, r *model.Report, fn func(io.W
 	return nil
 }
 
-func baselineKey(f model.Finding) string {
-	return fmt.Sprintf("%s|%s|%d", f.RuleID, f.File, f.Line)
+func baselineExactKey(ruleID, file string, line int) string {
+	return fmt.Sprintf("%s|%s|%d", ruleID, file, line)
+}
+
+func baselineFingerprint(ruleID, file, evidence string) string {
+	norm := strings.TrimSpace(evidence)
+	if norm == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", ruleID, file, norm)))
+	return fmt.Sprintf("fp:%s|%s|%x", ruleID, file, h[:8])
+}
+
+func isBaselineMatch(baseline map[string]bool, f model.Finding) bool {
+	if baseline[baselineExactKey(f.RuleID, f.File, f.Line)] {
+		return true
+	}
+	if fp := baselineFingerprint(f.RuleID, f.File, f.Evidence); fp != "" && baseline[fp] {
+		return true
+	}
+	return false
 }
 
 func loadBaseline(path string) (map[string]bool, error) {
@@ -254,9 +273,12 @@ func loadBaseline(path string) (map[string]bool, error) {
 	if err := json.Unmarshal(data, &rep); err != nil {
 		return nil, fmt.Errorf("malformed baseline report JSON: %w", err)
 	}
-	set := make(map[string]bool, len(rep.Findings))
+	set := make(map[string]bool, len(rep.Findings)*2)
 	for _, f := range rep.Findings {
-		set[baselineKey(f)] = true
+		set[baselineExactKey(f.RuleID, f.File, f.Line)] = true
+		if fp := baselineFingerprint(f.RuleID, f.File, f.Evidence); fp != "" {
+			set[fp] = true
+		}
 	}
 	return set, nil
 }

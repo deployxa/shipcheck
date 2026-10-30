@@ -4,6 +4,8 @@ Shipcheck is designed for CI: deterministic, offline, no credentials needed.
 
 ## GitHub Actions
 
+### Turnkey Action (Recommended)
+
 ```yaml
 name: production-readiness
 on: [push, pull_request]
@@ -12,13 +14,32 @@ jobs:
   shipcheck:
     runs-on: ubuntu-latest
     permissions:
-      security-events: write   # only needed for SARIF upload
+      security-events: write   # for automated SARIF code scanning annotations
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.22' }
-      - run: go install github.com/deployxa/shipcheck/cmd/shipcheck@v0.1.0-rc1
+      - uses: deployxa/shipcheck@v0.1.0-rc1
+        with:
+          severity-threshold: high
+```
+
+The action downloads the prebuilt binary in seconds, runs the scan, and automatically uploads SARIF to GitHub Code Scanning.
+
+### Standalone Binary / CLI Invocation
+
+```yaml
+name: production-readiness
+on: [push, pull_request]
+
+jobs:
+  shipcheck:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: curl -sSL https://raw.githubusercontent.com/deployxa/shipcheck/main/scripts/install.sh | sh
       - run: shipcheck . --severity-threshold high --format sarif --output shipcheck.sarif
       - name: Upload SARIF
         if: always()

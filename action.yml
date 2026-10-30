@@ -37,25 +37,65 @@ inputs:
   version:
     description: 'Shipcheck version to install (e.g. latest or v0.1.0-rc1)'
     required: false
-    default: 'latest'
+    default: 'v0.1.0-rc1'
+  upload-sarif:
+    description: 'Automatically upload SARIF report to GitHub Code Scanning for inline PR annotations'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
   steps:
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.22'
-        cache: true
-
-    - name: Install Shipcheck
+    - name: Install Shipcheck Binary
       shell: bash
       run: |
-        if [ "${{ inputs.version }}" = "latest" ]; then
-          go install github.com/deployxa/shipcheck/cmd/shipcheck@latest
-        else
-          go install github.com/deployxa/shipcheck/cmd/shipcheck@${{ inputs.version }}
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        ARCH="$(uname -m)"
+        case "$ARCH" in
+          x86_64|amd64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+          *) ARCH="amd64" ;;
+        esac
+
+        RAW_VER="${{ inputs.version }}"
+        if [ "$RAW_VER" = "latest" ]; then
+          RAW_VER="v0.1.0-rc1"
         fi
+        TAG="${RAW_VER}"
+        case "$TAG" in
+          v*) ;;
+          *) TAG="v${TAG}" ;;
+        esac
+        VER="${TAG#v}"
+
+        EXT="tar.gz"
+        if [ "$OS" = "windows" ]; then
+          EXT="zip"
+        fi
+
+        URL="https://github.com/deployxa/shipcheck/releases/download/${TAG}/shipcheck-${VER}-${OS}-${ARCH}.${EXT}"
+        echo "Attempting to download prebuilt binary from: $URL"
+
+        TMP=$(mktemp -d)
+        if curl -sSL -f -o "$TMP/archive.$EXT" "$URL"; then
+          if [ "$EXT" = "zip" ]; then
+            unzip -q "$TMP/archive.$EXT" -d "$TMP"
+          else
+            tar -xzf "$TMP/archive.$EXT" -C "$TMP"
+          fi
+          if [ -w "/usr/local/bin" ]; then
+            mv "$TMP/shipcheck" /usr/local/bin/shipcheck
+          else
+            sudo mv "$TMP/shipcheck" /usr/local/bin/shipcheck
+          fi
+          chmod +x /usr/local/bin/shipcheck
+          echo "Installed prebuilt Shipcheck binary successfully."
+        else
+          echo "Prebuilt release binary not found at $URL. Running install script fallback..."
+          curl -sSL https://raw.githubusercontent.com/deployxa/shipcheck/main/scripts/install.sh | sh
+        fi
+        rm -rf "$TMP"
+        shipcheck version
 
     - name: Run Shipcheck Scan
       shell: bash
@@ -75,3 +115,10 @@ runs:
         fi
         echo "Executing: shipcheck $ARGS"
         shipcheck $ARGS
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: inputs.format == 'sarif' && inputs.upload-sarif == 'true' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.output }}
+      continue-on-error: true

@@ -2,6 +2,7 @@ package rules
 
 import (
 	"testing"
+	"time"
 
 	"github.com/deployxa/shipcheck/internal/config"
 	"github.com/deployxa/shipcheck/internal/discovery"
@@ -10,12 +11,19 @@ import (
 )
 
 func TestInlineSuppressions(t *testing.T) {
+	// Fix time to 2026-10-30 for deterministic expiry testing
+	origNow := nowFunc
+	defer func() { nowFunc = origNow }()
+	fixedDate, _ := time.Parse("2006-01-02", "2026-10-30")
+	nowFunc = func() time.Time { return fixedDate }
+
 	cases := []struct {
 		name       string
 		content    string
 		ruleID     string
 		line       int
 		suppressed bool
+		wantExp    string
 	}{
 		{
 			name:       "same-line single rule ignore",
@@ -66,14 +74,40 @@ func TestInlineSuppressions(t *testing.T) {
 			line:       2,
 			suppressed: true,
 		},
+		{
+			name:       "active unexpired suppression with until date in future",
+			content:    "FROM alpine:3.19 # shipcheck:ignore SC-DCK-001 until=2026-12-31\nUSER root",
+			ruleID:     "SC-DCK-001",
+			line:       1,
+			suppressed: true,
+		},
+		{
+			name:       "expired suppression with until date in past",
+			content:    "FROM alpine:3.19 # shipcheck:ignore SC-DCK-001 until=2026-10-01\nUSER root",
+			ruleID:     "SC-DCK-001",
+			line:       1,
+			suppressed: false,
+			wantExp:    "2026-10-01",
+		},
+		{
+			name:       "expired next-line suppression",
+			content:    "# shipcheck:ignore-next-line SC-DCK-002 until=2026-09-15\nUSER root\nCMD ['node']",
+			ruleID:     "SC-DCK-002",
+			line:       2,
+			suppressed: false,
+			wantExp:    "2026-09-15",
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sm := parseSuppressions(c.content)
-			got := sm.isSuppressed(c.ruleID, c.line)
-			if got != c.suppressed {
-				t.Errorf("isSuppressed(%q, %d) = %v; want %v", c.ruleID, c.line, got, c.suppressed)
+			gotSupp, exp := sm.checkSuppression(c.ruleID, c.line)
+			if gotSupp != c.suppressed {
+				t.Errorf("checkSuppression(%q, %d) suppressed = %v; want %v", c.ruleID, c.line, gotSupp, c.suppressed)
+			}
+			if c.wantExp != "" && exp != c.wantExp {
+				t.Errorf("checkSuppression(%q, %d) expiredDate = %q; want %q", c.ruleID, c.line, exp, c.wantExp)
 			}
 		})
 	}
